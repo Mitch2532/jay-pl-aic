@@ -3,132 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vinyl Archive</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        .album { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 10px; }
-        .album img { width: 150px; border-radius: 10px; margin-bottom: 10px; }
-        ul { list-style: none; padding: 0; }
-        li { cursor: pointer; padding: 5px; }
-        li:hover { background: #eee; }
-        textarea { width: 100%; height: 150px; margin-bottom: 10px; }
-        button { padding: 10px 15px; font-size: 16px; }
-    </style>
+    <title>Simple Playlist</title>
 </head>
 <body>
-
-    <h1>Alice In Chains - Playlist for Jay</h1>
-    <p>Paste your direct song links below (one per line):</p>
-    <textarea id="trackLinks"></textarea>
-    <br>
+    <h2>Enter Track Links (One per Line)</h2>
+    <textarea id="trackInput" rows="10" cols="50" placeholder="Paste direct track URLs here..."></textarea><br>
     <button onclick="generatePlaylist()">Generate Playlist</button>
-
-    <audio id="player" controls></audio>
-    <div id="playlist"></div>
+    <button id="shareButton" style="display:none;" onclick="copyShareLink()">Copy Shareable Link</button>
+    <p id="shareLink" style="display:none;"></p>
+    
+    <h2>Playlist</h2>
+    <ul id="playlist"></ul>
 
     <script>
-        let playlist = [];
-        let currentTrackIndex = 0;
-        let player = document.getElementById('player');
-
         function generatePlaylist() {
-            let rawLinks = document.getElementById('trackLinks').value.trim().split("\n");
-            let tracks = rawLinks.map(url => ({ src: url.trim() }));
+            const input = document.getElementById("trackInput").value.trim();
+            if (!input) return;
 
-            let playlistDiv = document.getElementById('playlist');
-            playlistDiv.innerHTML = "<p>Loading metadata...</p>";
+            const tracks = input.split("\n").map(track => track.trim()).filter(track => track);
+            const playlist = document.getElementById("playlist");
+            playlist.innerHTML = "";
 
-            let albums = {};
+            tracks.forEach(track => {
+                const li = document.createElement("li");
+                li.innerHTML = `<audio controls src="${track}"></audio>`;
+                playlist.appendChild(li);
+            });
 
-            function processTrack(track, index) {
-                jsmediatags.read(track.src, {
-                    onSuccess: function(tag) {
-                        let album = tag.tags.album || "Unknown Album";
-                        let albumArtist = tag.tags.artist || "Unknown Artist";
-                        let trackTitle = tag.tags.title || `Track ${index + 1}`;
-                        let comment = tag.tags.comment || "";
-                        let artworkData = tag.tags.picture ? 
-                            `data:${tag.tags.picture.format};base64,${btoa(String.fromCharCode(...new Uint8Array(tag.tags.picture.data)))}` 
-                            : "https://via.placeholder.com/150";
-
-                        track.album = album;
-                        track.albumArtist = albumArtist;
-                        track.title = trackTitle;
-                        track.comment = comment;
-                        track.artwork = artworkData;
-
-                        if (!albums[albumArtist]) albums[albumArtist] = {};
-                        if (!albums[albumArtist][album]) {
-                            albums[albumArtist][album] = { comment: comment, artwork: artworkData, tracks: [] };
-                        }
-                        albums[albumArtist][album].tracks.push(track);
-
-                        playlist[index] = track; // Keep the original order
-
-                        if (index === tracks.length - 1) displayPlaylist();
-                    },
-                    onError: function(error) {
-                        console.log("Metadata read error:", error);
-                        if (index === tracks.length - 1) displayPlaylist();
-                    }
-                });
-            }
-
-            function displayPlaylist() {
-                playlistDiv.innerHTML = "";
-                Object.keys(albums).forEach(albumArtist => {
-                    Object.keys(albums[albumArtist]).forEach(album => {
-                        let albumData = albums[albumArtist][album];
-
-                        let albumDiv = document.createElement("div");
-                        albumDiv.classList.add("album");
-
-                        albumDiv.innerHTML = `
-                            <img src="${albumData.artwork}" alt="Album Art">
-                            <h2>${album}</h2>
-                            <h3>${albumArtist}</h3>
-                            <p><i>${albumData.comment}</i></p>
-                            <ul id="playlist-${album.replace(/\s+/g, '')}"></ul>
-                        `;
-
-                        playlistDiv.appendChild(albumDiv);
-
-                        let trackList = document.getElementById(`playlist-${album.replace(/\s+/g, '')}`);
-                        albumData.tracks.forEach((track, trackIndex) => {
-                            let trackItem = document.createElement("li");
-                            trackItem.textContent = track.title;
-                            trackItem.dataset.src = track.src;
-                            trackItem.dataset.index = trackIndex;
-
-                            trackItem.addEventListener("click", function () {
-                                currentTrackIndex = parseInt(this.dataset.index);
-                                playTrack(currentTrackIndex);
-                            });
-
-                            trackList.appendChild(trackItem);
-                        });
-                    });
-                });
-
-                player.addEventListener("ended", () => {
-                    if (currentTrackIndex < playlist.length - 1) {
-                        currentTrackIndex++;
-                        playTrack(currentTrackIndex);
-                    }
-                });
-            }
-
-            function playTrack(index) {
-                if (playlist[index]) {
-                    player.src = playlist[index].src;
-                    player.play();
-                }
-            }
-
-            tracks.forEach((track, index) => processTrack(track, index));
+            // Create sharable URL
+            const shareableUrl = window.location.origin + window.location.pathname + "?tracks=" + encodeURIComponent(tracks.join(","));
+            document.getElementById("shareLink").innerHTML = `<a href="${shareableUrl}" target="_blank">${shareableUrl}</a>`;
+            document.getElementById("shareButton").style.display = "block";
+            document.getElementById("shareLink").style.display = "block";
         }
-    </script>
 
+        function copyShareLink() {
+            const link = document.getElementById("shareLink").querySelector("a").href;
+            navigator.clipboard.writeText(link).then(() => {
+                alert("Shareable link copied!");
+            });
+        }
+
+        // Auto-load playlist from URL
+        function loadFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has("tracks")) {
+                const tracks = decodeURIComponent(urlParams.get("tracks")).split(",");
+                document.getElementById("trackInput").value = tracks.join("\n");
+                generatePlaylist();
+            }
+        }
+
+        // Load playlist when page loads
+        window.onload = loadFromURL;
+    </script>
 </body>
 </html>
